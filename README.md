@@ -28,10 +28,11 @@ Options:
 
 ## Quick Start
 
-1. `mkdir somewhere-you-like`
-2. Add `somewhere-you-like` to `%PATH%` manually.
-3. Place `nvm.exe` in `somewhere-you-like`.
-4. Start.
+1. Uninstall Node.js installed by MSI installer and Remove `C:\Users\USERNAME\AppData\Roaming\npm`.
+2. `mkdir somewhere-you-like`
+3. Add `somewhere-you-like` to `%PATH%` manually.
+4. Place `nvm.exe` in `somewhere-you-like`.
+5. Start.
 
     ``` cmd
     > nvm use 10.15.3
