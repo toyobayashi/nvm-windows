@@ -10,7 +10,7 @@
 #include "config.h"
 #include "progress.h"
 
-#define NVM_VERSION "1.0.0"
+#define NVM_VERSION "1.1.0"
 
 typedef struct unzipparam {
    ProgressBar* prog;
@@ -170,7 +170,8 @@ static void list(const Config& config) {
   }
 
   for (unsigned int i = 0; i < li.size(); i++) {
-    if (!Path::isDirectory(Path::join(config.root, li[i]))) {
+    auto targetFile = Path::join(config.root, li[i]);
+    if (!Path::isDirectory(targetFile) && Path::extname(targetFile) == L".exe") {
       std::wstring nodever = li[i].substr(li[i].find(L"-v") + 2).substr(0, li[i].substr(li[i].find(L"-v") + 2).find(L"-"));
       std::wstring nodearch = li[i].substr(li[i].find(L"-x") + 1, 3);
       if ((wver == nodever || wver == std::wstring(L"v") + nodever) && currentArch == nodearch) {
@@ -182,24 +183,59 @@ static void list(const Config& config) {
   }
 }
 
-static bool use(const std::wstring& version, const Config& config) {
-  bool res = true;
-  std::wstring nodeName = std::wstring(L"node-v") + version + L"-win32-" + config.arch + L".exe";
-  std::wstring exePath = Path::join(config.root, nodeName);
-  std::wstring npmroot = Path::join(Path::__dirname(), L"node_modules", L"npm");
-  std::wstring npmpackagejson = Path::join(npmroot, L"package.json");
-  std::wstring npmcmd = Path::join(Path::__dirname(), L"npm.cmd");
+static bool uninstallNpm() {
+  std::wstring __dirname = Path::__dirname();
+  std::wstring npmdir = Path::join(__dirname, L"node_modules", L"npm");
+  std::wstring npm = Path::join(__dirname, L"npm");
+  std::wstring npmcmd = Path::join(__dirname, L"npm.cmd");
+  std::wstring npx = Path::join(__dirname, L"npx");
+  std::wstring npxcmd = Path::join(__dirname, L"npx.cmd");
 
-  if (!Path::exists(exePath)) {
-    if (!install(version, config)) {
-      return false;
+  if (Path::isDirectory(npmdir)) {
+    if (!Path::remove(npmdir)) return false;
+  }
+
+  if (Path::exists(npm)) {
+    if (!Path::remove(npm)) return false;
+  }
+
+  if (Path::exists(npmcmd)) {
+    if (!Path::remove(npmcmd)) return false;
+  }
+
+  if (Path::exists(npx)) {
+    if (!Path::remove(npx)) return false;
+  }
+
+  if (Path::exists(npxcmd)) {
+    if (!Path::remove(npxcmd)) return false;
+  }
+
+  return true;
+}
+
+static bool usenpm(const std::wstring& npmver, const Config& config) {
+  std::wstring __dirname = Path::__dirname();
+  std::wstring npmdir = Path::join(__dirname, L"node_modules", L"npm");
+  std::wstring packagejson = Path::join(npmdir, L"package.json");
+  std::wstring npm = Path::join(__dirname, L"npm");
+  std::wstring npmcmd = Path::join(__dirname, L"npm.cmd");
+  std::wstring npx = Path::join(__dirname, L"npx");
+  std::wstring npxcmd = Path::join(__dirname, L"npx.cmd");
+
+  if (Path::exists(packagejson) && Path::exists(npmcmd)) {
+    nlohmann::json pkg = nlohmann::json::parse(Path::readFile(packagejson));
+    auto version = pkg["version"].get<std::string>();
+    if (version == Util::w2a(npmver)) {
+      printf("Now using npm v%s\n", Util::w2a(npmver).c_str());
+      return true;
     }
   }
 
-  if (!Path::exists(npmpackagejson)) {
-    std::wstring npmver = getNpmVersion(Util::w2a(version));
-    if (npmver == L"0.0.0") return false;
-    std::wstring zipPath = Path::join(config.cache, npmver + L".zip");
+  std::wstring zipPath = Path::join(config.cache, npmver + L".zip");
+
+  bool res = true;
+  if (!Path::exists(zipPath)) {
     ProgressBar* prog = new ProgressBar(std::wstring(L"Downloading npm v") + npmver, 0, 100, 0, 0);
     if (config.npm_mirror == L"default") {
       res = download(
@@ -226,29 +262,57 @@ static bool use(const std::wstring& version, const Config& config) {
     delete prog;
 
     if (!res) return false;
-
-    prog = new ProgressBar(std::wstring(L"Extracting npm ") + npmver, 0, 100, 0, 0);
-    unzipparam unzipp;
-    unzipp.prog = prog;
-    unzipp.rootname = L"";
-    res = Util::unzip(zipPath, Path::join(Path::__dirname(), L"node_modules"), onUnzip, &unzipp);
-    delete prog;
-
-    if (!res) return false;
-
-    res = Path::rename(Path::join(Path::__dirname(), L"node_modules", unzipp.rootname), npmroot);
-
-    if (!res) return false;
   }
+
+  if (!Path::exists(zipPath)) return false;
+
+  if (!uninstallNpm()) return false;
+
+  ProgressBar* prog = new ProgressBar(std::wstring(L"Extracting npm ") + npmver, 0, 100, 0, 0);
+  unzipparam unzipp;
+  unzipp.prog = prog;
+  unzipp.rootname = L"";
+  res = Util::unzip(zipPath, Path::join(Path::__dirname(), L"node_modules"), onUnzip, &unzipp);
+  delete prog;
+
+  if (!res) return false;
+
+  res = Path::rename(Path::join(Path::__dirname(), L"node_modules", unzipp.rootname), npmdir);
+
+  if (!res) return false;
 
   if (!Path::exists(npmcmd)) {
-    Path::copyFile(Path::join(npmroot, L"bin", L"npm"), Path::join(Path::__dirname(), L"npm"));
-    Path::copyFile(Path::join(npmroot, L"bin", L"npm.cmd"), Path::join(Path::__dirname(), L"npm.cmd"));
-    Path::copyFile(Path::join(npmroot, L"bin", L"npx"), Path::join(Path::__dirname(), L"npx"));
-    Path::copyFile(Path::join(npmroot, L"bin", L"npx.cmd"), Path::join(Path::__dirname(), L"npx.cmd"));
+    Path::copyFile(Path::join(npmdir, L"bin", L"npm"), npm);
+    res = Path::copyFile(Path::join(npmdir, L"bin", L"npm.cmd"), npmcmd);
+    Path::copyFile(Path::join(npmdir, L"bin", L"npx"), npx);
+    Path::copyFile(Path::join(npmdir, L"bin", L"npx.cmd"), npxcmd);
   }
 
-  Path::copyFile(exePath, Path::join(Path::__dirname(), L"node.exe"));
+  if (!res) return false;
+
+  printf("Now using npm v%s\n", Util::w2a(npmver).c_str());
+  return true;
+}
+
+static bool use(const std::wstring& version, const Config& config) {
+  bool res = true;
+  std::wstring nodeName = std::wstring(L"node-v") + version + L"-win32-" + config.arch + L".exe";
+  std::wstring exePath = Path::join(config.root, nodeName);
+  std::wstring npmroot = Path::join(Path::__dirname(), L"node_modules", L"npm");
+  std::wstring npmpackagejson = Path::join(npmroot, L"package.json");
+  std::wstring npmcmd = Path::join(Path::__dirname(), L"npm.cmd");
+
+  if (!Path::exists(exePath)) {
+    if (!install(version, config)) return false;
+  }
+
+  if (!Path::exists(npmpackagejson)) {
+    std::wstring npmver = getNpmVersion(Util::w2a(version));
+    if (npmver == L"0.0.0") return false;
+    if (!usenpm(npmver, config)) return false;
+  }
+
+  if (!Path::copyFile(exePath, Path::join(Path::__dirname(), L"node.exe"))) return false;
 
   printf("Now using Node.js v%s (%s)\n", Util::w2a(version).c_str(), Util::w2a(config.arch).c_str());
   return true;
@@ -264,9 +328,11 @@ static void printHelp() {
   printf("  nvm cache [<npm cache dir>]\n");
   printf("  nvm root [<node binary dir>]\n");
   printf("  nvm list\n");
-  printf("  nvm use <version> [options]\n");
-  printf("  nvm uninstall <version>\n");
-  printf("  nvm install <version> [options]\n");
+  printf("  nvm use <node version> [options]\n");
+  printf("  nvm usenpm <npm version> [options]\n");
+  printf("  nvm uninstall <node version>\n");
+  printf("  nvm rmnpm\n");
+  printf("  nvm install <node version> [options]\n");
   printf("  nvm node_mirror [default | taobao | <url>]\n");
   printf("  nvm npm_mirror [default | taobao | <url>]\n");
 
@@ -342,7 +408,7 @@ int wmain(int argc, wchar_t** argv) {
 
   if (command == L"install") {
     if (cli.getArgument().size() == 0) {
-      printf("Example: \n\n  evm.exe install 4.1.4\n");
+      printf("Example: \n\n  nvm.exe install 4.1.4\n");
       return 0;
     }
 
@@ -357,7 +423,7 @@ int wmain(int argc, wchar_t** argv) {
 
   if (command == L"use") {
     if (cli.getArgument().size() == 0) {
-      printf("Example: \n\n  evm.exe use 4.1.4\n");
+      printf("Example: \n\n  nvm.exe use 4.1.4\n");
       return 0;
     }
 
@@ -369,13 +435,30 @@ int wmain(int argc, wchar_t** argv) {
 
   if (command == L"uninstall") {
     if (cli.getArgument().size() == 0) {
-      printf("Example: \n\n  evm.exe uninstall 4.1.4\n");
+      printf("Example: \n\n  nvm.exe uninstall 4.1.4\n");
       return 0;
     }
 
     if (!uninstall(cli.getArgument()[0], config)) {
       printf("Uninstall failed.\n");
     }
+    return 0;
+  }
+
+  if (command == L"usenpm") {
+    if (cli.getArgument().size() == 0) {
+      printf("Example: \n\n  nvm.exe usenpm 6.9.0\n");
+      return 0;
+    }
+
+    if (!usenpm(cli.getArgument()[0], config)) {
+      printf("usenpm failed.\n");
+    }
+    return 0;
+  }
+
+  if (command == L"rmnpm") {
+    uninstallNpm();
     return 0;
   }
 

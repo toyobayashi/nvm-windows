@@ -94,6 +94,24 @@ bool Util::isX64(const std::wstring& p) {
   }
 }
 
+std::wstring Util::trimW(const std::wstring& wstr) {
+  std::wstring res = wstr;
+  if (res != L"") {
+    res.erase(0, res.find_first_not_of(L" "));
+    res.erase(res.find_last_not_of(L" ") + 1);
+  }
+  return res;
+}
+
+std::string Util::trimA(const std::string& str) {
+  std::string res = str;
+  if (res != "") {
+    res.erase(0, res.find_first_not_of(" "));
+    res.erase(res.find_last_not_of(" ") + 1);
+  }
+  return res;
+}
+
 bool Util::createShortcut(const std::wstring& lpszFileName, const std::wstring& lpszLnkFileDir, const std::wstring& lpszLnkFileName, const std::wstring& lpszWorkDir, unsigned short wHotkey, const std::wstring& lpszDescription, int iShowCmd) {
   HRESULT hr = 0;
   IShellLink* pLink = NULL;

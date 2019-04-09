@@ -30,6 +30,8 @@ public:
   static int getTerminalWidth();
   static int getTerminalCursorPositionToRight();
   static bool isX64(const std::wstring&);
+  static std::wstring trimW(const std::wstring&);
+  static std::string trimA(const std::string&);
   // static std::string sha256(const std::wstring&);
 
   static bool createShortcut(

@@ -27,9 +27,9 @@ Config::Config(Cli* cli) {
         std::wstring wline = Util::a2w(line);
 
         auto split = wline.find(L"=");
-        if (split != std::string::npos) {
-          auto key = wline.substr(0, split);
-          auto value = wline.substr(split + 1);
+        if (wline[0] != L';' && split != std::string::npos) {
+          auto key = Util::trimW(wline.substr(0, split));
+          auto value = Util::trimW(wline.substr(split + 1));
           if (key == L"node_mirror" && value != L"") {
             node_mirror = value;
           }
@@ -92,9 +92,9 @@ void Config::set(const std::wstring& key, const std::wstring& value) {
     std::wstring wline = Util::a2w(line);
 
     auto split = wline.find(L"=");
-    if (split != std::string::npos) {
-      auto _key = wline.substr(0, split);
-      auto _value = wline.substr(split + 1);
+    if (wline[0] != L';' && split != std::string::npos) {
+      auto _key = Util::trimW(wline.substr(0, split));
+      auto _value = Util::trimW(wline.substr(split + 1));
       configmap[_key] = _value;
     }
   }

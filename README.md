@@ -11,7 +11,9 @@ Usage:
   nvm root [<node binary dir>]
   nvm list
   nvm use <version> [options]
+  nvm usenpm <version> [options]
   nvm uninstall <version>
+  nvm rmnpm
   nvm install <version> [options]
   nvm node_mirror [default | taobao | <url>]
   nvm npm_mirror [default | taobao | <url>]
